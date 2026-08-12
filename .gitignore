@@ -1,0 +1,25 @@
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Local app data / caches
+.amazon_oauth_cache.json
+*.db
+tmp_*.db
+*.sqlite3
+
+# GitHub clone folder not needed in this repo
+Livros_Bot/
+
+# IDE / OS
+.vscode/
+.DS_Store
+Thumbs.db
