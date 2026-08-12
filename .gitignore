@@ -2,6 +2,9 @@
 .env.*
 !.env.example
 
+# Secrets / credentials
+livros_by_mands-credentials.csv
+
 # Python
 __pycache__/
 *.py[cod]
