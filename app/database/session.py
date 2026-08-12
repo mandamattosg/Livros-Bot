@@ -13,6 +13,10 @@ from app.config import settings
 from app.database.base import Base
 
 DATABASE_URL = settings.DATABASE_URL or "sqlite:///./book_price_bot.db"
+if DATABASE_URL and DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+elif DATABASE_URL and DATABASE_URL.startswith("postgresql+psycopg2://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
 
 
 def _is_sqlite_url(url: str) -> bool:
