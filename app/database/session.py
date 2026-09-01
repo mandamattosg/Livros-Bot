@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 
 import psycopg
 from sqlalchemy import create_engine
 from sqlalchemy import inspect
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 from app.database.base import Base
+from app.models.notification_queue import NotificationQueue
+from app.models.price_history import PriceHistory
+from app.utils.datetime_utc import utc_now
 
 DATABASE_URL = settings.DATABASE_URL or "sqlite:///./book_price_bot.db"
 if DATABASE_URL and DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL:
@@ -43,19 +47,40 @@ def get_session():
         db.close()
 
 
+def cleanup_old_records(db: Session, max_days: int = 60) -> dict[str, int]:
+    """Remove registros antigos dos históricos e filas persistentes."""
+    from app.models.monitoring_queue import MonitoringQueue
+
+    cutoff = utc_now() - timedelta(days=max_days)
+    deleted = {
+        "price_history": db.query(PriceHistory).filter(PriceHistory.checked_at < cutoff).delete(synchronize_session=False),
+        "monitoring_queue": db.query(MonitoringQueue).filter(MonitoringQueue.created_at < cutoff).delete(synchronize_session=False),
+        "notification_queue": db.query(NotificationQueue).filter(
+            NotificationQueue.created_at < cutoff,
+            NotificationQueue.status.in_(["sent", "failed", "skipped"]),
+        ).delete(synchronize_session=False),
+    }
+    db.commit()
+    return deleted
+
+
 def init_db() -> None:
-    """Prepara o banco com criação e ajustes aditivos de schema."""
+    """Prepara o banco com criação, ajustes e limpeza de dados antigos."""
 
     import app.models  # noqa: F401
 
     try:
         Base.metadata.create_all(bind=engine)
         _ensure_schema()
+        with SessionLocal() as db:
+            cleanup_old_records(db)
     except OperationalError as exc:
         if _is_missing_postgres_database_error(exc):
             _create_missing_postgres_database()
             Base.metadata.create_all(bind=engine)
             _ensure_schema()
+            with SessionLocal() as db:
+                cleanup_old_records(db)
             return
         raise
 

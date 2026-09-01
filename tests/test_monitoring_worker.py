@@ -56,7 +56,7 @@ class MonitoringWorkerTests(unittest.TestCase):
 
         with patch("app.services.update_service.AmazonClient.get_items", return_value=mocked_response), patch(
             "app.services.notification_service.requests.post"
-        ) as mock_post:
+        ) as mock_post, patch("app.scheduler.worker.send_monitoring_execution_report"):
             mock_post.return_value.content = b'{"ok": true}'
             mock_post.return_value.json.return_value = {"ok": True}
             results = MonitoringWorker(self.Session, batch_size=5).drain_pending()
@@ -93,7 +93,7 @@ class MonitoringWorkerTests(unittest.TestCase):
 
         with patch("app.services.update_service.AmazonClient.get_items", return_value=mocked_response), patch(
             "app.services.notification_service.requests.post"
-        ) as mock_post:
+        ) as mock_post, patch("app.scheduler.worker.send_monitoring_execution_report"):
             results = MonitoringWorker(self.Session, batch_size=5).drain_pending()
 
         self.assertEqual(results[0]["status"], "updated")

@@ -15,6 +15,7 @@ from app.models.product import Product
 from app.scheduler.monitoring_queue import MonitoringQueueService, ProductMonitoringJob
 from app.scheduler.notification_queue import NotificationQueueService
 from app.scheduler.worker_lock import WorkerLockService
+from app.services.monitoring_execution_report_service import send_monitoring_execution_report
 from app.services.price_drop_service import PriceDropService
 from app.services.update_service import UpdateService
 
@@ -58,9 +59,13 @@ class MonitoringWorker:
 
     def drain_pending(self) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
+        start_time = time.time()
         while True:
             batch = self.run_once()
             if not batch:
+                execution_time = time.time() - start_time
+                if results:
+                    send_monitoring_execution_report(results, execution_time)
                 return results
             results.extend(batch)
 
@@ -94,14 +99,17 @@ class MonitoringWorker:
                     print("Monitoring worker perdeu o lock e será encerrado.")
                     return
 
+                batch_start_time = time.time()
                 results = self.run_once()
                 if not results:
                     time.sleep(max(self.poll_interval, 0.2))
                     continue
 
+                batch_execution_time = time.time() - batch_start_time
                 print(f"Monitoring worker processou {len(results)} item(ns).")
                 for result in results:
                     print(result)
+                send_monitoring_execution_report(results, batch_execution_time)
                 time.sleep(max(self.batch_sleep, 0.0))
         finally:
             WorkerLockService(lock_db).release(self.worker_name, owner_id)
