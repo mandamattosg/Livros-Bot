@@ -10,7 +10,7 @@ if PROJECT_ROOT not in sys.path:
 
 from sqlalchemy.orm import Session
 
-from app.amazon.client import AmazonClient
+from app.amazon.client import AmazonClient, AmazonRateLimitError
 from app.logging import get_logger
 from app.models.price_history import PriceHistory
 from app.models.product import Product
@@ -39,6 +39,12 @@ class UpdateService:
 
             try:
                 response = self.amazon_client.get_items(asins)
+            except AmazonRateLimitError as exc:
+                # Rate limit: marca apenas estes produtos como rate_limited e continua
+                logger.warning("Rate limit (429) da Amazon. Reenfileirando lote de %d produtos: %s", len(batch), exc)
+                for product in batch:
+                    results.append({"asin": product.asin, "status": "rate_limited"})
+                continue
             except (ConnectionError, TimeoutError) as exc:
                 logger.warning("Erro temporário de rede ao atualizar produtos: %s", exc)
                 for product in batch:

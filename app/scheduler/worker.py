@@ -163,6 +163,14 @@ class MonitoringWorker:
             if "price" in update_result:
                 result.price = float(update_result["price"])
 
+            job_id = jobs_by_product_id[product.id].queue_id
+
+            if result.status == "rate_limited":
+                # Rate limit: reenfileirar com delay maior (30 segundos)
+                queue.mark_retry_or_failed(job_id, "Rate limit da Amazon", self.max_retries, delay_seconds=30)
+                batch_results.append(result.as_dict())
+                continue
+
             if result.status == "updated":
                 latest_price = self._load_latest_price(db, product.id)
                 drop_event = drop_service.detect_drop_from_prices(
@@ -174,7 +182,7 @@ class MonitoringWorker:
                     result.drop_detected = True
                     result.notifications_queued = notification_queue_service.enqueue_drop_notifications(drop_event, product)
 
-            queue.mark_completed(jobs_by_product_id[product.id].queue_id)
+            queue.mark_completed(job_id)
             batch_results.append(result.as_dict())
 
         return batch_results
