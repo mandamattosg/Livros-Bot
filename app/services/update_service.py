@@ -11,9 +11,12 @@ if PROJECT_ROOT not in sys.path:
 from sqlalchemy.orm import Session
 
 from app.amazon.client import AmazonClient
+from app.logging import get_logger
 from app.models.price_history import PriceHistory
 from app.models.product import Product
 from app.services.price_service import PriceService
+
+logger = get_logger("app.services.update_service")
 
 
 class UpdateService:
@@ -34,7 +37,14 @@ class UpdateService:
             if not asins:
                 continue
 
-            response = self.amazon_client.get_items(asins)
+            try:
+                response = self.amazon_client.get_items(asins)
+            except (ConnectionError, TimeoutError) as exc:
+                logger.warning("Erro temporário de rede ao atualizar produtos: %s", exc)
+                for product in batch:
+                    results.append({"asin": product.asin, "status": "network_error"})
+                continue
+
             items = response.get("itemsResult", {}).get("items", [])
             product_prices_to_record: list[tuple[Product, float]] = []
             for product in batch:

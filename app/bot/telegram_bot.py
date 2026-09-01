@@ -3,6 +3,7 @@ from __future__ import annotations
 import traceback
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import NetworkError, TimedOut
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from urllib.parse import urlencode
@@ -254,6 +255,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     error = context.error
+
+    # Erros temporários de rede: apenas registra no log e alerta simples
+    if isinstance(error, (NetworkError, TimedOut, ConnectionError, TimeoutError)):
+        logger.warning("Erro temporário de rede: %s", error)
+        send_admin_alert("⚠️ Erro temporário de rede")
+        return
+
+    # Outros erros: log completo e alerta com traceback
     logger.exception("Erro não tratado no Telegram bot", exc_info=error)
 
     try:

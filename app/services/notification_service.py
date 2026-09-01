@@ -60,11 +60,16 @@ class NotificationService:
                 "inline_keyboard": [[{"text": "📲 Ver oferta na Amazon", "url": offer_link, "style": "primary"}]]
             })
 
-        response = requests.post(url, data=payload, timeout=10)
-        payload_response = response.json() if response.content else {}
-        if not payload_response.get("ok", False):
-            description = payload_response.get("description", "Erro desconhecido ao enviar mensagem")
-            raise RuntimeError(description)
+        try:
+            response = requests.post(url, data=payload, timeout=10)
+            payload_response = response.json() if response.content else {}
+            if not payload_response.get("ok", False):
+                description = payload_response.get("description", "Erro desconhecido ao enviar mensagem")
+                raise RuntimeError(description)
+        except (ConnectionError, TimeoutError, requests.exceptions.RequestException) as exc:
+            # Erros de rede: registra mas não quebra o fluxo
+            logger.warning("Erro temporário de rede ao enviar mensagem: %s", exc)
+            raise RuntimeError(f"Erro temporário de rede: {exc}") from exc
 
     def send_drop_notification(self, drop_event: dict, product: Product) -> int:
         """Envia uma notificação para todos os usuários associados ao produto."""
@@ -90,9 +95,12 @@ class NotificationService:
                 self._send_message(chat_id, message, product)
                 sent += 1
                 logger.info("Notificação enviada para o usuário %s", chat_id)
-            except Exception as exc:
+            except RuntimeError as exc:
                 reason = str(exc)
-                if "Chat not found" in reason or "chat not found" in reason.lower() or "bot was blocked by the user" in reason.lower():
+                # Erros de rede: registra mas continua tentando outros usuários
+                if "Erro temporário de rede" in reason:
+                    logger.warning("Falha temporária de rede ao enviar para o usuário %s: %s", chat_id, exc)
+                elif "Chat not found" in reason or "chat not found" in reason.lower() or "bot was blocked by the user" in reason.lower():
                     logger.warning("Não foi possível enviar para o usuário %s porque o chat do Telegram não foi encontrado ou o bot não tem acesso. O usuário precisa iniciar o bot primeiro.", chat_id)
                 else:
                     logger.warning("Falha ao enviar notificação para o usuário %s: %s", chat_id, exc)
