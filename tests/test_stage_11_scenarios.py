@@ -45,7 +45,9 @@ class Stage11ScenariosTests(unittest.TestCase):
 
         drop_event = {"previous_price": Decimal("50.00"), "new_price": Decimal("40.00"), "difference": Decimal("10.00"), "percentage": 20.0}
         service = NotificationService(self.session)
-        count = service.send_drop_notification(drop_event, product)
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.json.return_value = {"ok": True}
+            count = service.send_drop_notification(drop_event, product)
 
         self.assertEqual(count, 2)
 

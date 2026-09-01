@@ -124,7 +124,7 @@ class ProductServiceTests(unittest.TestCase):
             product, message = self.service.register_product("123", "https://www.amazon.com.br/dp/9999999999")
 
         self.assertIsNone(product)
-        self.assertEqual(message, "Você já atingiu o limite de 10 produtos monitorados. Remova um produto para cadastrar outro. Use o comando /remover")
+        self.assertEqual(message, "Você já atingiu o limite de 5 produtos monitorados. Remova um produto para cadastrar outro. Use o comando /remover")
 
     def test_register_product_respects_configurable_limit(self) -> None:
         with patch.object(settings, "USER_PRODUCT_MONITOR_LIMIT", 2):
