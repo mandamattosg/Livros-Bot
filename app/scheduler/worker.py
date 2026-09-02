@@ -10,6 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.logging import get_logger
 from app.models.price_history import PriceHistory
 from app.models.product import Product
 from app.scheduler.monitoring_queue import MonitoringQueueService, ProductMonitoringJob
@@ -18,6 +19,9 @@ from app.scheduler.worker_lock import WorkerLockService
 from app.services.monitoring_execution_report_service import send_monitoring_execution_report
 from app.services.price_drop_service import PriceDropService
 from app.services.update_service import UpdateService
+
+
+logger = get_logger("app.scheduler.worker")
 
 
 @dataclass
@@ -95,12 +99,26 @@ class MonitoringWorker:
 
             print(f"Monitoring worker iniciado (batch_size={self.batch_size}, poll_interval={self.poll_interval:.2f}s)")
             while True:
-                if not lock_service.refresh(self.worker_name, owner_id, self.lock_ttl):
+                try:
+                    lock_is_owned = lock_service.refresh(self.worker_name, owner_id, self.lock_ttl)
+                except Exception:
+                    lock_db.rollback()
+                    logger.exception("Falha ao renovar lock do monitoring worker; tentando novamente")
+                    time.sleep(min(max(self.poll_interval, 0.2), 30.0))
+                    continue
+
+                if not lock_is_owned:
                     print("Monitoring worker perdeu o lock e será encerrado.")
                     return
 
                 batch_start_time = time.time()
-                results = self.run_once()
+                try:
+                    results = self.run_once()
+                except Exception:
+                    logger.exception("Falha transitÃ³ria no monitoring worker; tentando novamente")
+                    lock_db.rollback()
+                    time.sleep(min(max(self.poll_interval, 0.2), 30.0))
+                    continue
                 if not results:
                     time.sleep(max(self.poll_interval, 0.2))
                     continue
@@ -109,10 +127,17 @@ class MonitoringWorker:
                 print(f"Monitoring worker processou {len(results)} item(ns).")
                 for result in results:
                     print(result)
-                send_monitoring_execution_report(results, batch_execution_time)
+                try:
+                    send_monitoring_execution_report(results, batch_execution_time)
+                except Exception:
+                    logger.exception("Falha ao enviar relatÃ³rio do monitoring worker")
                 time.sleep(max(self.batch_sleep, 0.0))
         finally:
-            WorkerLockService(lock_db).release(self.worker_name, owner_id)
+            try:
+                lock_db.rollback()
+                WorkerLockService(lock_db).release(self.worker_name, owner_id)
+            except Exception:
+                logger.exception("Falha ao liberar lock do monitoring worker")
             lock_db.close()
 
     def _process_jobs(
