@@ -14,12 +14,15 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.session import SessionLocal, init_db
+from app.logging import get_logger
 from app.models.notification_queue import NotificationQueue
 from app.models.product import Product
 from app.models.user import User
 from app.scheduler.worker_lock import WorkerLockService
 from app.services.notification_service import NotificationService
 from app.utils.datetime_utc import utc_now
+
+logger = get_logger("app.scheduler.notification_worker")
 
 
 class NotificationWorker:
@@ -66,24 +69,30 @@ class NotificationWorker:
                 stats[key] += value
 
     def run_forever(self) -> None:
+        logger.info("Iniciando notification worker em modo forever; preparando banco de dados.")
         init_db()
+        logger.info("Banco preparado; iniciando loop do notification worker.")
 
         owner_id = f"{os.getpid()}-{uuid4().hex[:8]}"
         lock_db = self.session_factory()
         try:
             lock_service = WorkerLockService(lock_db)
             if not lock_service.acquire(self.worker_name, owner_id, self.lock_ttl):
-                print("Outro notification worker já está ativo. Encerrando este processo.")
+                logger.info("Outro notification worker já está ativo. Encerrando este processo.")
                 return
 
             recovered = self._reset_stuck_sending_notifications()
             if recovered > 0:
-                print(f"Notification worker recuperou {recovered} item(ns) presos em sending.")
+                logger.info("Notification worker recuperou %s item(ns) presos em sending.", recovered)
 
-            print(f"Notification worker iniciado (batch_size={self.batch_size}, poll_interval={self.poll_interval:.2f}s)")
+            logger.info(
+                "Notification worker iniciado (batch_size=%s, poll_interval=%.2fs)",
+                self.batch_size,
+                self.poll_interval,
+            )
             while True:
                 if not lock_service.refresh(self.worker_name, owner_id, self.lock_ttl):
-                    print("Notification worker perdeu o lock e será encerrado.")
+                    logger.warning("Notification worker perdeu o lock e será encerrado.")
                     return
 
                 stats = self.drain_pending_batch()
@@ -91,7 +100,7 @@ class NotificationWorker:
                     time.sleep(max(self.poll_interval, 0.2))
                     continue
 
-                print(stats)
+                logger.info("Notification worker processou lote: %s", stats)
                 time.sleep(max(self.batch_sleep, 0.0))
         finally:
             WorkerLockService(lock_db).release(self.worker_name, owner_id)
@@ -204,4 +213,4 @@ if __name__ == "__main__":
         run_notification_worker_forever()
     else:
         summary = run_notification_worker_once()
-        print(summary)
+        logger.info("Notification worker finalizou: %s", summary)

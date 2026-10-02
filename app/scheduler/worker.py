@@ -90,14 +90,18 @@ class MonitoringWorker:
         try:
             lock_service = WorkerLockService(lock_db)
             if not lock_service.acquire(self.worker_name, owner_id, self.lock_ttl):
-                print("Outro monitoring worker já está ativo. Encerrando este processo.")
+                logger.info("Outro monitoring worker já está ativo. Encerrando este processo.")
                 return
 
             recovered = self._reset_stuck_processing_jobs()
             if recovered > 0:
-                print(f"Monitoring worker recuperou {recovered} item(ns) presos em processing.")
+                logger.info("Monitoring worker recuperou %s item(ns) presos em processing.", recovered)
 
-            print(f"Monitoring worker iniciado (batch_size={self.batch_size}, poll_interval={self.poll_interval:.2f}s)")
+            logger.info(
+                "Monitoring worker iniciado (batch_size=%s, poll_interval=%.2fs)",
+                self.batch_size,
+                self.poll_interval,
+            )
             while True:
                 try:
                     lock_is_owned = lock_service.refresh(self.worker_name, owner_id, self.lock_ttl)
@@ -108,7 +112,7 @@ class MonitoringWorker:
                     continue
 
                 if not lock_is_owned:
-                    print("Monitoring worker perdeu o lock e será encerrado.")
+                    logger.warning("Monitoring worker perdeu o lock e será encerrado.")
                     return
 
                 batch_start_time = time.time()
@@ -124,9 +128,9 @@ class MonitoringWorker:
                     continue
 
                 batch_execution_time = time.time() - batch_start_time
-                print(f"Monitoring worker processou {len(results)} item(ns).")
+                logger.info("Monitoring worker processou %s item(ns).", len(results))
                 for result in results:
-                    print(result)
+                    logger.info("Resultado do monitoring worker: %s", result)
                 try:
                     send_monitoring_execution_report(results, batch_execution_time)
                 except Exception:
