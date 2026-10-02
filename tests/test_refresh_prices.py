@@ -97,6 +97,44 @@ class RefreshPricesTests(unittest.TestCase):
         self.assertEqual(stats["eligible_high_frequency"], 1)
         self.assertEqual(stats["eligible_low_frequency"], 2)
 
+    def test_zero_intervals_make_recently_checked_products_eligible(self) -> None:
+        now = utc_now()
+        high_product = Product(asin="ASIN-ZERO-H", title="High immediate")
+        low_product = Product(asin="ASIN-ZERO-L", title="Low immediate")
+        self.session.add_all([high_product, low_product])
+        self.session.flush()
+
+        self._create_users_for_product(high_product, 3)
+        self._create_users_for_product(low_product, 1, 10)
+
+        checked_recently = now - timedelta(minutes=5)
+        self.session.add_all([
+            MonitoringQueue(
+                product_id=high_product.id,
+                status="completed",
+                processed_at=checked_recently,
+                updated_at=checked_recently,
+            ),
+            MonitoringQueue(
+                product_id=low_product.id,
+                status="completed",
+                processed_at=checked_recently,
+                updated_at=checked_recently,
+            ),
+        ])
+        self.session.commit()
+
+        with (
+            patch.object(settings, "REFRESH_HIGH_MONITOR_MIN_USERS", 3),
+            patch.object(settings, "REFRESH_HIGH_MONITOR_INTERVAL_HOURS", 0),
+            patch.object(settings, "REFRESH_LOW_MONITOR_INTERVAL_HOURS", 0),
+        ):
+            eligible_products, stats = refresh_module._select_products_for_refresh(self.session, now)
+
+        self.assertEqual({product.asin for product in eligible_products}, {"ASIN-ZERO-H", "ASIN-ZERO-L"})
+        self.assertEqual(stats["eligible_high_frequency"], 1)
+        self.assertEqual(stats["eligible_low_frequency"], 1)
+
     def test_refresh_prices_returns_segmented_summary(self) -> None:
         now = utc_now()
         high_product = Product(asin="ASIN-SEG-1", title="High")
