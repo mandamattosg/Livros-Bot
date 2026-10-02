@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import traceback
 
 import requests
@@ -7,6 +8,7 @@ import requests
 from app.config import settings
 
 ADMIN_ERROR_PREFIX = "🚨 ERRO LIVROS BOT"
+logger = logging.getLogger(__name__)
 
 
 def get_admin_chat_id() -> str | None:
@@ -20,11 +22,16 @@ def get_admin_chat_id() -> str | None:
 
 def send_admin_alert(message: str) -> bool:
     if not settings.ADMIN_ALERTS_ENABLED:
+        logger.warning("Alerta administrativo não enviado: ADMIN_ALERTS_ENABLED está desativado.")
         return False
 
     bot_token = (settings.TELEGRAM_BOT_TOKEN or "").strip()
     admin_chat_id = get_admin_chat_id()
-    if not bot_token or not admin_chat_id:
+    if not bot_token:
+        logger.warning("Alerta administrativo não enviado: TELEGRAM_BOT_TOKEN não está configurado neste serviço.")
+        return False
+    if not admin_chat_id:
+        logger.warning("Alerta administrativo não enviado: ADMIN_ALERT_CHAT_ID e ADMIN_TELEGRAM_ID estão vazios.")
         return False
 
     try:
@@ -33,10 +40,22 @@ def send_admin_alert(message: str) -> bool:
             data={"chat_id": admin_chat_id, "text": message},
             timeout=10,
         )
-        response.raise_for_status()
         payload = response.json() if response.content else {}
-        return bool(payload.get("ok", False))
-    except Exception:
+        if not response.ok or not payload.get("ok", False):
+            description = payload.get("description", "Telegram não confirmou o envio")
+            logger.warning(
+                "Telegram rejeitou o alerta administrativo (HTTP %s): %s",
+                response.status_code,
+                str(description)[:300],
+            )
+            return False
+        return True
+    except requests.RequestException as exc:
+        # Do not log exception text: it can contain the Bot API URL and its token.
+        logger.warning("Falha de rede ao enviar alerta administrativo (%s).", type(exc).__name__)
+        return False
+    except (ValueError, TypeError) as exc:
+        logger.warning("Resposta inválida do Telegram ao enviar alerta administrativo (%s).", type(exc).__name__)
         return False
 
 

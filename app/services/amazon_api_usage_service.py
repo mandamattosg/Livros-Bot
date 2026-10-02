@@ -56,7 +56,7 @@ def send_daily_amazon_usage_report(
             return False
 
         if not alert_sender(build_daily_amazon_usage_report(usage)):
-            logger.error("Falha ao enviar o relatório diário de uso da Amazon referente a %s.", day)
+            logger.warning("Falha ao enviar o relatório diário de uso da Amazon referente a %s.", day)
             return False
 
         usage.report_sent_at = utc_now()
