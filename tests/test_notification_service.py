@@ -39,6 +39,46 @@ class NotificationServiceTests(unittest.TestCase):
             "https://www.amazon.com.br/dp/6528101965?ref_=abc&tag=new-tag-20",
         )
 
+    def test_send_message_sends_photo_with_caption_and_offer_button(self) -> None:
+        product = Product(
+            asin="6528101965",
+            title="Livro Teste",
+            image_url="https://images.example.com/book.jpg",
+            affiliate_link="https://www.amazon.com.br/dp/6528101965",
+        )
+
+        with (
+            patch("app.services.notification_service.settings.TELEGRAM_BOT_TOKEN", "test-token"),
+            patch("app.services.notification_service.requests.post") as mock_post,
+        ):
+            mock_post.return_value.content = b'{"ok": true}'
+            mock_post.return_value.json.return_value = {"ok": True}
+            self.service._send_message("123", "Promoção!", product)
+
+        args, kwargs = mock_post.call_args
+        self.assertTrue(args[0].endswith("/sendPhoto"))
+        self.assertEqual(kwargs["data"]["photo"], "https://images.example.com/book.jpg")
+        self.assertEqual(kwargs["data"]["caption"], "Promoção!")
+        self.assertNotIn("text", kwargs["data"])
+        self.assertIn("reply_markup", kwargs["data"])
+
+    def test_send_message_falls_back_to_text_when_product_has_no_image(self) -> None:
+        product = Product(asin="6528101965", title="Livro Teste")
+
+        with (
+            patch("app.services.notification_service.settings.TELEGRAM_BOT_TOKEN", "test-token"),
+            patch("app.services.notification_service.requests.post") as mock_post,
+        ):
+            mock_post.return_value.content = b'{"ok": true}'
+            mock_post.return_value.json.return_value = {"ok": True}
+            self.service._send_message("123", "Promoção!", product)
+
+        args, kwargs = mock_post.call_args
+        self.assertTrue(args[0].endswith("/sendMessage"))
+        self.assertEqual(kwargs["data"]["text"], "Promoção!")
+        self.assertNotIn("photo", kwargs["data"])
+        self.assertNotIn("caption", kwargs["data"])
+
     def test_send_drop_notification_builds_message_and_counts_recipients(self) -> None:
         product = Product(asin="6528101965", title="Livro Teste")
         self.session.add(product)

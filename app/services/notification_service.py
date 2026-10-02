@@ -47,13 +47,20 @@ class NotificationService:
         if not settings.TELEGRAM_BOT_TOKEN:
             raise RuntimeError("TELEGRAM_BOT_TOKEN não configurado")
 
-        url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
+        method = "sendMessage"
         payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
         if product is not None:
             offer_link = self._build_offer_link(product)
             payload["reply_markup"] = json.dumps({
                 "inline_keyboard": [[{"text": "📲 Ver oferta na Amazon", "url": offer_link, "style": "primary"}]]
             })
+            image_url = (product.image_url or "").strip()
+            if image_url:
+                method = "sendPhoto"
+                payload["photo"] = image_url
+                payload["caption"] = payload.pop("text")
+
+        url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/{method}"
 
         try:
             response = requests.post(url, data=payload, timeout=10)
