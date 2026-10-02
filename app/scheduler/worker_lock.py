@@ -35,12 +35,13 @@ class WorkerLockService:
         if lock is None:
             return False
 
-        expires_at = ensure_utc(lock.expires_at)
-        if lock.owner_id != owner_id and expires_at is not None and expires_at > now:
+        current_expires_at = ensure_utc(lock.expires_at)
+        if lock.owner_id != owner_id and current_expires_at is not None and current_expires_at > now:
             return False
 
         lock.owner_id = owner_id
         lock.acquired_at = now
+        # Renew the lease when taking over an expired lock.
         lock.expires_at = expires_at
         self.db.commit()
         return True

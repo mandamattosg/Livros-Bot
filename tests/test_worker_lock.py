@@ -33,3 +33,6 @@ class WorkerLockServiceTests(unittest.TestCase):
         self.session.commit()
 
         self.assertTrue(self.service.acquire("monitoring_worker", "owner-b", 60))
+        self.session.refresh(lock)
+        self.assertEqual(lock.owner_id, "owner-b")
+        self.assertGreater(lock.expires_at, utc_now().replace(tzinfo=None))

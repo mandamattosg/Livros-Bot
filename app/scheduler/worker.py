@@ -90,8 +90,13 @@ class MonitoringWorker:
         try:
             lock_service = WorkerLockService(lock_db)
             if not lock_service.acquire(self.worker_name, owner_id, self.lock_ttl):
-                logger.info("Outro monitoring worker já está ativo. Encerrando este processo.")
-                return
+                logger.warning("Já existe monitoring worker ativo; aguardando o lock liberar.")
+                while True:
+                    lock_db.rollback()
+                    time.sleep(max(self.poll_interval, 0.2))
+                    if lock_service.acquire(self.worker_name, owner_id, self.lock_ttl):
+                        logger.info("Lock do monitoring worker liberado; esta instância assumiu o processamento.")
+                        break
 
             recovered = self._reset_stuck_processing_jobs()
             if recovered > 0:

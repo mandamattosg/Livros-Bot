@@ -78,8 +78,13 @@ class NotificationWorker:
         try:
             lock_service = WorkerLockService(lock_db)
             if not lock_service.acquire(self.worker_name, owner_id, self.lock_ttl):
-                logger.info("Outro notification worker já está ativo. Encerrando este processo.")
-                return
+                logger.warning("Já existe notification worker ativo; aguardando o lock liberar.")
+                while True:
+                    lock_db.rollback()
+                    time.sleep(max(self.poll_interval, 0.2))
+                    if lock_service.acquire(self.worker_name, owner_id, self.lock_ttl):
+                        logger.info("Lock do notification worker liberado; esta instância assumiu o processamento.")
+                        break
 
             recovered = self._reset_stuck_sending_notifications()
             if recovered > 0:
