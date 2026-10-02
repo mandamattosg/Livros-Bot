@@ -31,9 +31,13 @@ class MonitoringResult:
     product_id: int
     asin: str | None
     status: str
+    title: str | None = None
     price: float | None = None
     drop_detected: bool = False
     notifications_queued: int = 0
+    previous_price: float | None = None
+    drop_amount: float | None = None
+    drop_percentage: float | None = None
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -45,6 +49,14 @@ class MonitoringResult:
         }
         if self.price is not None:
             payload["price"] = self.price
+        if self.title is not None:
+            payload["title"] = self.title
+        if self.previous_price is not None:
+            payload["previous_price"] = self.previous_price
+        if self.drop_amount is not None:
+            payload["drop_amount"] = self.drop_amount
+        if self.drop_percentage is not None:
+            payload["drop_percentage"] = self.drop_percentage
         return payload
 
 
@@ -172,7 +184,12 @@ class MonitoringWorker:
             batch_results.append(MonitoringResult(product_id=product_id, asin=None, status="missing_product").as_dict())
 
         results_by_product_id: dict[int, MonitoringResult] = {
-            product.id: MonitoringResult(product_id=product.id, asin=product.asin, status="processing")
+            product.id: MonitoringResult(
+                product_id=product.id,
+                asin=product.asin,
+                status="processing",
+                title=product.title,
+            )
             for product in ordered_products
         }
 
@@ -193,6 +210,7 @@ class MonitoringWorker:
 
         for product, update_result in zip(ordered_products, update_results):
             result = results_by_product_id[product.id]
+            result.title = product.title
             result.status = update_result.get("status", "unknown")
             if "price" in update_result:
                 result.price = float(update_result["price"])
@@ -214,6 +232,9 @@ class MonitoringWorker:
                 )
                 if drop_event is not None:
                     result.drop_detected = True
+                    result.previous_price = float(drop_event["previous_price"])
+                    result.drop_amount = float(drop_event["difference"])
+                    result.drop_percentage = float(drop_event["percentage"])
                     result.notifications_queued = notification_queue_service.enqueue_drop_notifications(drop_event, product)
 
             queue.mark_completed(job_id)

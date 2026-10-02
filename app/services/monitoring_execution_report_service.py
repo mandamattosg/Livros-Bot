@@ -6,6 +6,40 @@ from typing import Any
 from app.services.admin_alert_service import send_admin_alert
 
 
+def _format_brl(value: float) -> str:
+    formatted = f"{value:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    return f"R$ {formatted}"
+
+
+def _format_promotion(result: dict[str, Any]) -> str:
+    asin = result.get("asin") or f"produto #{result.get('product_id', '?')}"
+    title = " ".join(str(result.get("title") or "").split())
+    if title and title != asin:
+        if len(title) > 55:
+            title = f"{title[:52]}..."
+        product_label = f"{asin} — {title}"
+    else:
+        product_label = str(asin)
+
+    previous_price = result.get("previous_price")
+    current_price = result.get("price")
+    drop_amount = result.get("drop_amount")
+    drop_percentage = result.get("drop_percentage")
+    if previous_price is not None and current_price is not None:
+        if drop_amount is None:
+            drop_amount = previous_price - current_price
+        reduction = f"−{_format_brl(float(drop_amount))}"
+        if drop_percentage is not None:
+            percentage_text = f"{float(drop_percentage):.2f}".replace(".", ",")
+            reduction += f"; −{percentage_text}%"
+        return (
+            f"🔥 {product_label}: {_format_brl(float(previous_price))} → "
+            f"{_format_brl(float(current_price))} ({reduction}) | "
+            f"{result.get('notifications_queued', 0)} alertas"
+        )
+    return f"🔥 {product_label}: promoção detectada; preço atual indisponível"
+
+
 def build_monitoring_execution_report(
     results: list[dict[str, Any]],
     execution_time_seconds: float | None = None,
@@ -24,7 +58,7 @@ def build_monitoring_execution_report(
     message = (
         "📊 Relatório de Execução - Monitoramento de Preços\n\n"
         f"⏰ Timestamp: {timestamp}\n"
-        f"📦 Total de jobs processados: {total_jobs}\n"
+        f"📦 Produtos verificados: {total_jobs} (1 produto por job)\n"
         f"✅ Jobs bem-sucedidos: {successful_jobs}\n"
         f"❌ Jobs falhados: {failed_jobs}\n"
         f"⏭️ Jobs pulados: {skipped_jobs}\n"
@@ -33,10 +67,23 @@ def build_monitoring_execution_report(
     if drop_detected_count > 0:
         message += (
             f"\n🔥 Promoções detectadas: {drop_detected_count}\n"
-            f"📬 Alertas enviados aos usuários: {total_notifications}\n"
+            f"📬 Alertas enfileirados para usuários: {total_notifications}\n"
         )
     else:
         message += "\n❄️ Nenhuma promoção detectada nesta execução.\n"
+
+    promotions = [result for result in results if result.get("drop_detected", False)]
+    if promotions:
+        message += "\n🔥 Detalhe das promoções:\n"
+        omitted_promotions = 0
+        for result in promotions:
+            detail = _format_promotion(result)
+            if len(message) + len(detail) + 1 > 3900:
+                omitted_promotions += 1
+                continue
+            message += f"\n{detail}"
+        if omitted_promotions:
+            message += f"\n… {omitted_promotions} promoção(ões) omitida(s) do detalhamento por limite de tamanho."
 
     if execution_time_seconds is not None:
         message += f"\n⏱️ Tempo de execução: {execution_time_seconds:.2f}s"
