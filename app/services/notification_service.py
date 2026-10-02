@@ -11,7 +11,7 @@ from app.logging import get_logger
 from app.models.product import Product
 from app.models.user import User
 from app.models.user_product import UserProduct
-from app.utils.parse_link import extract_asin
+from app.utils.affiliate_link import build_affiliate_link
 
 logger = get_logger("app.services.notification_service")
 
@@ -36,17 +36,12 @@ class NotificationService:
             return value
 
     def _build_offer_link(self, product: Product) -> str:
-        affiliate_link = product.affiliate_link or ""
-        if affiliate_link:
-            return affiliate_link
-
-        asin = product.asin or extract_asin(product.affiliate_link or "")
-        if not asin:
-            return "https://www.amazon.com.br"
-
-        if settings.AMAZON_PARTNER_TAG:
-            return f"https://www.amazon.com.br/dp/{asin}?tag={settings.AMAZON_PARTNER_TAG}"
-        return f"https://www.amazon.com.br/dp/{asin}"
+        return build_affiliate_link(
+            product.affiliate_link,
+            product.asin,
+            settings.AMAZON_PARTNER_TAG,
+            fallback_to_product_url=True,
+        ) or "https://www.amazon.com.br"
 
     def _send_message(self, chat_id: str | int, message: str, product: Product | None = None) -> None:
         if not settings.TELEGRAM_BOT_TOKEN:

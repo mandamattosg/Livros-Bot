@@ -24,6 +24,21 @@ class NotificationServiceTests(unittest.TestCase):
         self.session.close()
         Base.metadata.drop_all(self.engine)
 
+    def test_build_offer_link_replaces_saved_partner_tag(self) -> None:
+        product = Product(
+            asin="6528101965",
+            title="Livro Teste",
+            affiliate_link="https://www.amazon.com.br/dp/6528101965?tag=old-tag&ref_=abc",
+        )
+
+        with patch("app.services.notification_service.settings.AMAZON_PARTNER_TAG", "new-tag-20"):
+            link = self.service._build_offer_link(product)
+
+        self.assertEqual(
+            link,
+            "https://www.amazon.com.br/dp/6528101965?ref_=abc&tag=new-tag-20",
+        )
+
     def test_send_drop_notification_builds_message_and_counts_recipients(self) -> None:
         product = Product(asin="6528101965", title="Livro Teste")
         self.session.add(product)

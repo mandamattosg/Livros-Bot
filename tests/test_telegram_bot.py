@@ -62,9 +62,21 @@ class TelegramBotTests(unittest.TestCase):
     def test_build_product_affiliate_link_uses_product_link(self) -> None:
         product = SimpleNamespace(asin="123", affiliate_link="https://example.com/product")
 
-        link = build_product_affiliate_link(product)
+        with patch("app.bot.telegram_bot.settings.AMAZON_PARTNER_TAG", None):
+            link = build_product_affiliate_link(product)
 
         self.assertEqual(link, "https://example.com/product")
+
+    def test_build_product_affiliate_link_replaces_stored_partner_tag(self) -> None:
+        product = SimpleNamespace(
+            asin="123",
+            affiliate_link="https://www.amazon.com.br/dp/123?tag=old-tag&ref_=abc",
+        )
+
+        with patch("app.bot.telegram_bot.settings.AMAZON_PARTNER_TAG", "new-tag-20"):
+            link = build_product_affiliate_link(product)
+
+        self.assertEqual(link, "https://www.amazon.com.br/dp/123?ref_=abc&tag=new-tag-20")
 
 
 if __name__ == "__main__":

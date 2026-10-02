@@ -6,8 +6,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import NetworkError, TimedOut
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
-from urllib.parse import urlencode
-
 from app.config import settings
 from app.database.session import SessionLocal, init_db
 from app.logging import get_logger
@@ -16,6 +14,7 @@ from app.models.product import Product
 from app.services.admin_alert_service import ADMIN_ERROR_PREFIX, send_admin_alert
 from app.services.admin_report_service import build_admin_report_message, get_admin_report_stats
 from app.services.product_service import ProductService
+from app.utils.affiliate_link import build_affiliate_link
 
 logger = get_logger("app.bot.telegram_bot")
 
@@ -62,15 +61,12 @@ def build_status_keyboard(products: list) -> InlineKeyboardMarkup:
 
 
 def build_product_affiliate_link(product: Product) -> str | None:
-    if product.affiliate_link:
-        return product.affiliate_link
-
-    if not settings.AMAZON_PARTNER_TAG:
-        return None
-
-    base_url = f"https://www.amazon.com.br/dp/{product.asin}"
-    params = {"tag": settings.AMAZON_PARTNER_TAG}
-    return f"{base_url}?{urlencode(params)}"
+    return build_affiliate_link(
+        product.affiliate_link,
+        product.asin,
+        settings.AMAZON_PARTNER_TAG,
+        fallback_to_product_url=False,
+    )
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
