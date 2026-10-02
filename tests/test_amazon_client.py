@@ -142,6 +142,25 @@ class AmazonClientTests(unittest.TestCase):
 
         self.assertEqual(price, 44.85)
 
+    def test_records_each_creators_api_attempt_including_429_retries(self) -> None:
+        self.client.session.post = Mock(return_value=StubResponse(429, {}))
+
+        with (
+            patch.object(amazon_client_module.settings, "AMAZON_ACCESS_TOKEN", "test-token", create=True),
+            patch.object(amazon_client_module.settings, "AMAZON_CLIENT_ID", None, create=True),
+            patch.object(amazon_client_module.settings, "AMAZON_CLIENT_SECRET", None, create=True),
+            patch("app.amazon.client.record_creator_api_request") as record_request,
+            patch("app.amazon.client.time.sleep"),
+        ):
+            with self.assertRaises(amazon_client_module.AmazonRateLimitError):
+                self.client.get_items(["B000000001"])
+
+        self.assertEqual(self.client.session.post.call_count, 3)
+        self.assertEqual(
+            [call.args[0] for call in record_request.call_args_list],
+            [429, 429, 429],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

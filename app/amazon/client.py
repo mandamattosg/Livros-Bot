@@ -9,6 +9,7 @@ import requests
 
 from app.config import settings
 from app.logging import get_logger
+from app.amazon.usage import record_creator_api_request
 
 
 class AmazonClientError(Exception):
@@ -201,10 +202,14 @@ class AmazonClient:
         }
 
         for attempt in range(3):
+            response = None
+            request_started = False
             try:
                 token = self.get_access_token()
                 headers["Authorization"] = f"Bearer {token}"
+                request_started = True
                 response = self.session.post(self.base_url, headers=headers, json=payload, timeout=30)
+                record_creator_api_request(response.status_code)
                 if response.status_code == 401:
                     self._clear_persisted_token()
                     raise AmazonAuthenticationError("Falha de autenticação ao consultar a Creators API")
@@ -215,6 +220,8 @@ class AmazonClient:
                 response.raise_for_status()
                 return response.json()
             except (requests.RequestException, AmazonRateLimitError, AmazonAuthenticationError) as exc:
+                if request_started and response is None:
+                    record_creator_api_request(None)
                 if attempt == 2:
                     raise
                 self.logger.warning("Falha na consulta à Creators API. Tentando novamente em %ss. Erro: %s", 2 ** attempt, exc)

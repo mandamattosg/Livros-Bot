@@ -28,12 +28,14 @@ def send_admin_alert(message: str) -> bool:
         return False
 
     try:
-        requests.post(
+        response = requests.post(
             f"https://api.telegram.org/bot{bot_token}/sendMessage",
             data={"chat_id": admin_chat_id, "text": message},
             timeout=10,
         )
-        return True
+        response.raise_for_status()
+        payload = response.json() if response.content else {}
+        return bool(payload.get("ok", False))
     except Exception:
         return False
 
