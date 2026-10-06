@@ -12,6 +12,8 @@ from app.database.base import Base
 from app.models.monitoring_queue import MonitoringQueue
 from app.models.price_history import PriceHistory
 from app.models.product import Product
+from app.models.user import User
+from app.models.user_product import UserProduct
 from app.scheduler.worker import MonitoringWorker
 from app.services.update_service import UpdateService
 
@@ -28,6 +30,11 @@ class RateLimitHandlingTests(unittest.TestCase):
         Base.metadata.drop_all(self.engine)
 
     def _enqueue_monitoring_job(self, product_id: int) -> None:
+        if self.session.query(UserProduct).filter(UserProduct.product_id == product_id).first() is None:
+            user = User(telegram_id=f"u{product_id}", username=f"u{product_id}")
+            self.session.add(user)
+            self.session.flush()
+            self.session.add(UserProduct(user_id=user.id, product_id=product_id))
         self.session.add(MonitoringQueue(product_id=product_id, status="pending"))
         self.session.commit()
 

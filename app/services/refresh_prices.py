@@ -45,7 +45,7 @@ def _select_products_for_refresh(db, now: datetime) -> tuple[list[Product], dict
             func.coalesce(monitor_count_subquery.c.monitor_count, 0).label("monitor_count"),
             last_completed_subquery.c.last_processed_at,
         )
-        .outerjoin(monitor_count_subquery, monitor_count_subquery.c.product_id == Product.id)
+        .join(monitor_count_subquery, monitor_count_subquery.c.product_id == Product.id)
         .outerjoin(last_completed_subquery, last_completed_subquery.c.product_id == Product.id)
         .all()
     )

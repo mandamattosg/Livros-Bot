@@ -13,6 +13,7 @@ from app.config import settings
 from app.logging import get_logger
 from app.models.price_history import PriceHistory
 from app.models.product import Product
+from app.models.user_product import UserProduct
 from app.scheduler.monitoring_queue import MonitoringQueueService, ProductMonitoringJob
 from app.scheduler.notification_queue import NotificationQueueService
 from app.scheduler.worker_lock import WorkerLockService
@@ -175,13 +176,28 @@ class MonitoringWorker:
         product_ids = [job.product_id for job in jobs]
         jobs_by_product_id = {job.product_id: job for job in jobs}
         products = self._load_products(db, product_ids)
-        ordered_products = [products[product_id] for product_id in product_ids if product_id in products]
-        previous_prices = self._load_latest_prices(db, [product.id for product in ordered_products])
 
+        monitored_ids = {
+            row[0]
+            for row in db.query(UserProduct.product_id)
+            .filter(UserProduct.product_id.in_(product_ids))
+            .distinct()
+            .all()
+        }
         missing_product_ids = [product_id for product_id in product_ids if product_id not in products]
         for product_id in missing_product_ids:
             queue.mark_skipped(jobs_by_product_id[product_id].queue_id, "missing_product")
             batch_results.append(MonitoringResult(product_id=product_id, asin=None, status="missing_product").as_dict())
+
+        for product_id in [pid for pid in products if pid not in monitored_ids]:
+            queue.mark_skipped(jobs_by_product_id[product_id].queue_id, "no_active_monitors")
+            batch_results.append(
+                MonitoringResult(product_id=product_id, asin=products[product_id].asin, status="no_active_monitors").as_dict()
+            )
+            del products[product_id]
+
+        ordered_products = [products[product_id] for product_id in product_ids if product_id in products]
+        previous_prices = self._load_latest_prices(db, [product.id for product in ordered_products])
 
         results_by_product_id: dict[int, MonitoringResult] = {
             product.id: MonitoringResult(
@@ -197,7 +213,7 @@ class MonitoringWorker:
             update_results = update_service.update_products(ordered_products)
         except Exception as exc:
             error_message = str(exc) or exc.__class__.__name__
-            for job in jobs:
+            for job in (jobs_by_product_id[p.id] for p in ordered_products):
                 outcome = queue.mark_retry_or_failed(job.queue_id, error_message, self.max_retries, delay_seconds=2)
                 batch_results.append(
                     MonitoringResult(

@@ -27,8 +27,29 @@ class MonitoringWorkerTests(unittest.TestCase):
         Base.metadata.drop_all(self.engine)
 
     def _enqueue_monitoring_job(self, product_id: int) -> None:
+        if self.session.query(UserProduct).filter(UserProduct.product_id == product_id).first() is None:
+            user = User(telegram_id=f"u{product_id}", username=f"u{product_id}")
+            self.session.add(user)
+            self.session.flush()
+            self.session.add(UserProduct(user_id=user.id, product_id=product_id))
         self.session.add(MonitoringQueue(product_id=product_id, status="pending"))
         self.session.commit()
+
+    def test_worker_skips_products_without_active_monitors(self) -> None:
+        product = Product(asin="ORPHAN1", title="Sem usuarios")
+        self.session.add(product)
+        self.session.flush()
+        self.session.add(MonitoringQueue(product_id=product.id, status="pending"))
+        self.session.commit()
+
+        with patch("app.scheduler.worker.UpdateService") as update_cls:
+            worker = MonitoringWorker(session_factory=lambda: self.session, batch_size=10)
+            results = worker.run_once()
+
+        update_cls.return_value.update_products.assert_called_once_with([])
+        self.assertEqual([r["status"] for r in results], ["no_active_monitors"])
+        queue_item = self.session.query(MonitoringQueue).first()
+        self.assertEqual(queue_item.status, "skipped")
 
     def test_worker_updates_product_and_sends_notification_on_drop(self) -> None:
         product = Product(asin="6528101965", title="Livro Teste")

@@ -89,13 +89,13 @@ class RefreshPricesTests(unittest.TestCase):
             eligible_products, stats = refresh_module._select_products_for_refresh(self.session, now)
 
         eligible_asins = {product.asin for product in eligible_products}
-        self.assertEqual(eligible_asins, {"ASIN-H-1", "ASIN-L-1", "ASIN-L-3"})
+        self.assertEqual(eligible_asins, {"ASIN-H-1", "ASIN-L-1"})
 
-        self.assertEqual(stats["products_found"], 5)
+        self.assertEqual(stats["products_found"], 4)
         self.assertEqual(stats["high_frequency_products"], 2)
-        self.assertEqual(stats["low_frequency_products"], 3)
+        self.assertEqual(stats["low_frequency_products"], 2)
         self.assertEqual(stats["eligible_high_frequency"], 1)
-        self.assertEqual(stats["eligible_low_frequency"], 2)
+        self.assertEqual(stats["eligible_low_frequency"], 1)
 
     def test_zero_intervals_make_recently_checked_products_eligible(self) -> None:
         now = utc_now()
