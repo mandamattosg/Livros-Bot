@@ -123,6 +123,17 @@ def _ensure_schema() -> None:
     with engine.begin() as connection:
         existing_tables = set(inspector.get_table_names())
 
+        if "user_products" in existing_tables:
+            # Remove vínculos duplicados antigos antes de criar o índice único.
+            connection.exec_driver_sql(
+                "DELETE FROM user_products WHERE id NOT IN "
+                "(SELECT MIN(id) FROM user_products GROUP BY user_id, product_id)"
+            )
+            connection.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_products_user_product "
+                "ON user_products (user_id, product_id)"
+            )
+
         if "monitoring_queue" in existing_tables:
             existing_columns = {column["name"] for column in inspector.get_columns("monitoring_queue")}
             if "available_at" not in existing_columns:

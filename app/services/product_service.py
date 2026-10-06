@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.amazon.client import AmazonClient
@@ -9,6 +10,9 @@ from app.models.user import User
 from app.models.user_product import UserProduct
 from app.services.price_service import PriceService
 from app.utils.parse_link import extract_asin
+
+ALREADY_MONITORED_MESSAGE = "Você já está monitorando este livro."
+
 
 
 class ProductService:
@@ -87,10 +91,15 @@ class ProductService:
                 f"Você já atingiu o limite de {monitor_limit} produtos monitorados. "
                 "Remova um produto para cadastrar outro. Use o comando /remover"
             )
-        if existing_relation is None:
-            relation = UserProduct(user_id=user.id, product_id=product.id)
-            self.db.add(relation)
+        if existing_relation is not None:
+            return product, ALREADY_MONITORED_MESSAGE
+        relation = UserProduct(user_id=user.id, product_id=product.id)
+        self.db.add(relation)
+        try:
             self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            return product, ALREADY_MONITORED_MESSAGE
 
         return product, "Produto cadastrado com sucesso."
 

@@ -13,7 +13,7 @@ from app.models.price_history import PriceHistory
 from app.models.product import Product
 from app.services.admin_alert_service import ADMIN_ERROR_PREFIX, send_admin_alert
 from app.services.admin_report_service import build_admin_report_message, get_admin_report_stats
-from app.services.product_service import ProductService
+from app.services.product_service import ALREADY_MONITORED_MESSAGE, ProductService
 from app.utils.affiliate_link import build_affiliate_link
 
 logger = get_logger("app.bot.telegram_bot")
@@ -231,6 +231,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         product, message = service.register_product(user_id, message_text)
         if product is None:
             await update.message.reply_text(message)
+            return
+
+        if message == ALREADY_MONITORED_MESSAGE:
+            await update.message.reply_text(
+                f"{message}\n📚 {product.title or product.asin}\nUse /lista para ver seus livros."
+            )
             return
 
         await update.message.reply_text(

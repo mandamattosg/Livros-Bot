@@ -203,6 +203,43 @@ class ProductServiceTests(unittest.TestCase):
         self.assertIsNotNone(product)
         self.assertEqual(message, "Produto cadastrado com sucesso.")
 
+    def test_register_same_link_repeatedly_does_not_duplicate_relation(self) -> None:
+        mocked_items = {
+            "itemsResult": {
+                "items": [
+                    {
+                        "detailPageURL": "https://www.amazon.com.br/dp/6555653302",
+                        "itemInfo": {"title": {"displayValue": "A hipótese do amor"}},
+                        "images": {"primary": {"large": {"url": "https://img.test"}}},
+                        "offersV2": {"listings": [{"price": {"money": {"amount": 44.85, "currency": "BRL"}}}]},
+                    }
+                ]
+            }
+        }
+        messages = []
+        with patch.object(self.service.amazon_client, "get_items", return_value=mocked_items):
+            for _ in range(5):
+                _, message = self.service.register_product("123", "https://www.amazon.com.br/dp/6555653302")
+                messages.append(message)
+
+        self.assertEqual(messages[0], "Produto cadastrado com sucesso.")
+        self.assertEqual(set(messages[1:]), {"Você já está monitorando este livro."})
+        self.assertEqual(self.service.db.query(UserProduct).count(), 1)
+
+    def test_unique_constraint_blocks_duplicate_relation_and_service_recovers(self) -> None:
+        product = Product(asin="RACE1", title="Livro")
+        user = User(telegram_id="123", username="u")
+        self.service.db.add_all([product, user])
+        self.service.db.commit()
+        self.service.db.add(UserProduct(user_id=user.id, product_id=product.id))
+        self.service.db.commit()
+
+        self.service.db.add(UserProduct(user_id=user.id, product_id=product.id))
+        from sqlalchemy.exc import IntegrityError
+        with self.assertRaises(IntegrityError):
+            self.service.db.commit()
+        self.service.db.rollback()
+        self.assertEqual(self.service.db.query(UserProduct).count(), 1)
     def test_list_products_returns_products_for_user(self) -> None:
         mocked_items = {
             "itemsResult": {
