@@ -97,6 +97,43 @@ class RefreshPricesTests(unittest.TestCase):
         self.assertEqual(stats["eligible_high_frequency"], 1)
         self.assertEqual(stats["eligible_low_frequency"], 1)
 
+    def test_tolerance_absorbs_trigger_drift(self) -> None:
+        now = utc_now()
+        high_drift = Product(asin="ASIN-DRIFT-H", title="High drift")
+        high_early = Product(asin="ASIN-EARLY-H", title="High too early")
+        low_drift = Product(asin="ASIN-DRIFT-L", title="Low drift")
+        self.session.add_all([high_drift, high_early, low_drift])
+        self.session.flush()
+
+        self._create_users_for_product(high_drift, 3)
+        self._create_users_for_product(high_early, 3, 10)
+        self._create_users_for_product(low_drift, 1, 20)
+
+        def completed(product: Product, age: timedelta) -> MonitoringQueue:
+            return MonitoringQueue(
+                product_id=product.id,
+                status="completed",
+                processed_at=now - age,
+                updated_at=now - age,
+            )
+
+        self.session.add_all([
+            completed(high_drift, timedelta(hours=6) - timedelta(seconds=6)),
+            completed(high_early, timedelta(hours=6) - timedelta(minutes=30)),
+            completed(low_drift, timedelta(hours=12) - timedelta(seconds=6)),
+        ])
+        self.session.commit()
+
+        with (
+            patch.object(settings, "REFRESH_HIGH_MONITOR_MIN_USERS", 3),
+            patch.object(settings, "REFRESH_HIGH_MONITOR_INTERVAL_HOURS", 6),
+            patch.object(settings, "REFRESH_LOW_MONITOR_INTERVAL_HOURS", 12),
+            patch.object(settings, "REFRESH_INTERVAL_TOLERANCE_MINUTES", 15),
+        ):
+            eligible_products, _ = refresh_module._select_products_for_refresh(self.session, now)
+
+        self.assertEqual({p.asin for p in eligible_products}, {"ASIN-DRIFT-H", "ASIN-DRIFT-L"})
+
     def test_zero_intervals_make_recently_checked_products_eligible(self) -> None:
         now = utc_now()
         high_product = Product(asin="ASIN-ZERO-H", title="High immediate")

@@ -53,6 +53,8 @@ def _select_products_for_refresh(db, now: datetime) -> tuple[list[Product], dict
     high_monitor_min_users = max(settings.REFRESH_HIGH_MONITOR_MIN_USERS, 1)
     high_interval = timedelta(hours=max(settings.REFRESH_HIGH_MONITOR_INTERVAL_HOURS, 0))
     low_interval = timedelta(hours=max(settings.REFRESH_LOW_MONITOR_INTERVAL_HOURS, 0))
+    # Absorve o drift entre o fim do ciclo anterior e o disparo do próximo gatilho.
+    tolerance = timedelta(minutes=max(settings.REFRESH_INTERVAL_TOLERANCE_MINUTES, 0))
 
     eligible_products: list[Product] = []
     stats = {
@@ -80,7 +82,7 @@ def _select_products_for_refresh(db, now: datetime) -> tuple[list[Product], dict
         if (
             interval == timedelta(0)
             or normalized_last_processed_at is None
-            or (normalized_last_processed_at + interval) <= now
+            or (normalized_last_processed_at + interval - tolerance) <= now
         ):
             eligible_products.append(product)
             stats[eligible_key] += 1
