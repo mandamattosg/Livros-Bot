@@ -22,6 +22,9 @@ tmp_*.db
 # GitHub clone folder not needed in this repo
 Livros_Bot/
 
+# Local planning notes
+Roteiro_Pre_Lancamento_Escala.md
+
 # IDE / OS
 .vscode/
 .DS_Store

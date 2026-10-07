@@ -116,7 +116,7 @@ class NotificationService:
 
         return (
             f"🚨 Queda de preço detectada!\n\n"
-            f"📖 Livro: {product.title or product.asin}\n\n"
+            f"🛍️ Produto: {product.title or product.asin}\n\n"
             f"💸 De: R$ {previous_price:.2f}\n"
             f"🔥 Por: R$ {new_price:.2f}\n\n"
             f"O preço pode subir novamente a qualquer momento."
