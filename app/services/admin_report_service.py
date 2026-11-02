@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.monitoring_queue import MonitoringQueue
 from app.models.notification_queue import NotificationQueue
 from app.models.price_history import PriceHistory
@@ -26,11 +27,26 @@ def build_admin_report_message(stats: dict[str, object]) -> str:
         f"👥 Usuários totais: {int(stats.get('total_users') or 0)}\n"
         f"✅ Usuários ativos (monitorando): {int(stats.get('active_users') or 0)}\n"
         f"📚 Produtos monitorados: {int(stats.get('products_monitored') or 0)}\n"
+        f"🔥 Produtos quentes: {int(stats.get('hot_products') or 0)}\n"
+        f"❄️ Produtos frios: {int(stats.get('cold_products') or 0)}\n"
         f"🏆 Produto mais monitorado: {top_product} ({top_product_monitors})\n"
         f"🧭 Fila monitoramento pendente: {int(stats.get('pending_monitoring_jobs') or 0)}\n"
         f"📬 Fila notificação pendente: {int(stats.get('pending_notification_jobs') or 0)}\n"
         f"⏱️ Última atualização de preço: {last_price_update_text}"
     )
+
+
+def get_product_temperature_counts(db: Session) -> dict[str, int]:
+    """Conta produtos quentes e frios com o mesmo critério de frequência do refresh de preços."""
+
+    high_monitor_min_users = max(settings.REFRESH_HIGH_MONITOR_MIN_USERS, 1)
+    monitor_counts = db.query(func.count(UserProduct.id)).group_by(UserProduct.product_id).all()
+    hot_products = sum(1 for (monitor_count,) in monitor_counts if monitor_count >= high_monitor_min_users)
+
+    return {
+        "hot_products": hot_products,
+        "cold_products": len(monitor_counts) - hot_products,
+    }
 
 
 def get_admin_report_stats(db: Session) -> dict[str, object]:
@@ -90,6 +106,7 @@ def get_admin_report_stats(db: Session) -> dict[str, object]:
         "active_users": int(active_users),
         "users_monitoring": int(users_monitoring),
         "products_monitored": int(products_monitored),
+        **get_product_temperature_counts(db),
         "total_monitorings": int(total_monitorings),
         "top_product": top_product,
         "top_product_monitors": int(top_product_monitors),

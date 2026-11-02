@@ -1,9 +1,11 @@
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.config import settings
 from app.database.base import Base
 from app.models.monitoring_queue import MonitoringQueue
 from app.models.notification_queue import NotificationQueue
@@ -48,8 +50,11 @@ class AdminReportServiceTests(unittest.TestCase):
         ])
         self.session.commit()
 
-        stats = get_admin_report_stats(self.session)
+        with patch.object(settings, "REFRESH_HIGH_MONITOR_MIN_USERS", 2):
+            stats = get_admin_report_stats(self.session)
 
+        self.assertEqual(stats["hot_products"], 1)
+        self.assertEqual(stats["cold_products"], 1)
         self.assertEqual(stats["total_users"], 2)
         self.assertEqual(stats["active_users"], 1)
         self.assertEqual(stats["users_monitoring"], 1)
@@ -69,6 +74,8 @@ class AdminReportServiceTests(unittest.TestCase):
                 "active_users": 9,
                 "users_monitoring": 7,
                 "products_monitored": 5,
+                "hot_products": 2,
+                "cold_products": 3,
                 "total_monitorings": 12,
                 "top_product": "Livro X",
                 "top_product_monitors": 4,
@@ -79,6 +86,8 @@ class AdminReportServiceTests(unittest.TestCase):
         )
 
         self.assertIn("Usuários totais: 10", message)
+        self.assertIn("Produtos quentes: 2", message)
+        self.assertIn("Produtos frios: 3", message)
         self.assertIn("Produto mais monitorado: Livro X (4)", message)
         self.assertIn("Última atualização de preço: 2026-08-08 12:30:00 UTC", message)
 
