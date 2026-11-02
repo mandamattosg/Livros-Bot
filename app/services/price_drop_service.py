@@ -10,9 +10,17 @@ from app.models.product import Product
 class PriceDropService:
     """Serviço responsável por detectar quedas de preço a partir do histórico."""
 
-    def __init__(self, minimum_drop_amount: Decimal | float | str | None = None) -> None:
+    def __init__(
+        self,
+        minimum_drop_amount: Decimal | float | str | None = None,
+        minimum_drop_percentage: Decimal | float | str | None = None,
+    ) -> None:
         configured_amount = minimum_drop_amount if minimum_drop_amount is not None else settings.PRICE_DROP_MINIMUM
+        configured_percentage = (
+            minimum_drop_percentage if minimum_drop_percentage is not None else settings.PRICE_DROP_MINIMUM_PERCENTAGE
+        )
         self.minimum_drop_amount = Decimal(str(configured_amount))
+        self.minimum_drop_percentage = Decimal(str(configured_percentage))
 
     def detect_drop(self, product: Product) -> dict | None:
         """Compara o último preço registrado com o preço anterior e retorna um evento se houve queda."""
@@ -51,6 +59,8 @@ class PriceDropService:
             difference = normalized_previous - normalized_latest
             if difference < self.minimum_drop_amount:
                 return None
+            if difference * 100 < normalized_previous * self.minimum_drop_percentage:
+                return None
 
             percentage = (difference / normalized_previous * 100) if normalized_previous else Decimal("0")
             return {
@@ -61,6 +71,7 @@ class PriceDropService:
                 "difference": difference,
                 "percentage": round(percentage, 2),
                 "minimum_drop_amount": self.minimum_drop_amount,
+                "minimum_drop_percentage": self.minimum_drop_percentage,
             }
 
         return None

@@ -11,15 +11,49 @@ class PriceDropServiceTests(unittest.TestCase):
         product = Product(asin="6528101965", title="Livro Teste")
         product.price_history = [
             PriceHistory(price=Decimal("50.00")),
-            PriceHistory(price=Decimal("46.00")),
+            PriceHistory(price=Decimal("45.00")),
         ]
 
         drop = PriceDropService().detect_drop(product)
 
         self.assertIsNotNone(drop)
         self.assertEqual(drop["previous_price"], Decimal("50.00"))
-        self.assertEqual(drop["new_price"], Decimal("46.00"))
+        self.assertEqual(drop["new_price"], Decimal("45.00"))
+        self.assertEqual(drop["difference"], Decimal("5.00"))
+
+    def test_detect_drop_returns_none_when_percentage_is_below_minimum(self) -> None:
+        product = Product(asin="6528101965", title="Livro Teste")
+        product.price_history = [
+            PriceHistory(price=Decimal("50.00")),
+            PriceHistory(price=Decimal("46.00")),
+        ]
+
+        drop = PriceDropService().detect_drop(product)
+
+        self.assertIsNone(drop)
+
+    def test_detect_drop_returns_event_at_amount_floor_and_minimum_percentage(self) -> None:
+        product = Product(asin="6528101965", title="Livro Teste")
+        product.price_history = [
+            PriceHistory(price=Decimal("40.00")),
+            PriceHistory(price=Decimal("36.00")),
+        ]
+
+        drop = PriceDropService().detect_drop(product)
+
+        self.assertIsNotNone(drop)
         self.assertEqual(drop["difference"], Decimal("4.00"))
+
+    def test_detect_drop_returns_none_when_percentage_passes_but_amount_is_below_floor(self) -> None:
+        product = Product(asin="6528101965", title="Livro Teste")
+        product.price_history = [
+            PriceHistory(price=Decimal("20.00")),
+            PriceHistory(price=Decimal("17.00")),
+        ]
+
+        drop = PriceDropService().detect_drop(product)
+
+        self.assertIsNone(drop)
 
     def test_detect_drop_returns_none_when_difference_is_below_minimum(self) -> None:
         product = Product(asin="6528101965", title="Livro Teste")

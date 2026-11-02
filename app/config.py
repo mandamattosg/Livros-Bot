@@ -32,6 +32,7 @@ class Settings:
     AMAZON_TOKEN_CACHE_FILE: str = os.getenv("AMAZON_TOKEN_CACHE_FILE", str(BASE_DIR / ".amazon_oauth_cache.json"))
     DATABASE_URL: str | None = os.getenv("DATABASE_URL")
     PRICE_DROP_MINIMUM: Decimal = Decimal(os.getenv("PRICE_DROP_MINIMUM", "4"))
+    PRICE_DROP_MINIMUM_PERCENTAGE: Decimal = Decimal(os.getenv("PRICE_DROP_MINIMUM_PERCENTAGE", "10"))
     USER_PRODUCT_MONITOR_LIMIT: int = int(os.getenv("USER_PRODUCT_MONITOR_LIMIT", "10"))
     MONITORING_WORKER_BATCH_SIZE: int = int(os.getenv("MONITORING_WORKER_BATCH_SIZE", "10"))
     MONITORING_WORKER_MAX_RETRIES: int = int(os.getenv("MONITORING_WORKER_MAX_RETRIES", "3"))
