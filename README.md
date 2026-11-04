@@ -1,4 +1,8 @@
-# Book Price Bot
+<p align="center">
+  <img src="assets/logo.png" alt="Livros Bot" width="280">
+</p>
+
+# Livros Bot
 
 Bot do Telegram que monitora preços de livros na Amazon Brasil e avisa quando o preço cai.
 
