@@ -77,7 +77,7 @@ class ProductServiceTests(unittest.TestCase):
             "itemsResult": {
                 "items": [
                     {
-                        "detailPageURL": "https://www.amazon.com.br/dp/B0aDbXxMO",
+                        "detailPageURL": "https://www.amazon.com.br/dp/B0ADBXXM01",
                         "itemInfo": {"title": {"displayValue": "Pack Ração Úmida Pedigree Sachê Carne/Frango/Cordeiro para Cães Adultos de Raças Pequenas - Leve 24 Pague 18"}},
                         "images": {"primary": {"large": {"url": "https://img.test"}}},
                         "offersV2": {"listings": [{"price": {"money": {"amount": 49.9, "currency": "BRL"}}}]},
@@ -86,7 +86,7 @@ class ProductServiceTests(unittest.TestCase):
             }
         }
         with patch.object(self.service.amazon_client, "get_items", return_value=mocked_items):
-            product, message = self.service.register_product("123", "https://www.amazon.com.br/dp/B0aDbXxMO")
+            product, message = self.service.register_product("123", "https://www.amazon.com.br/dp/B0ADBXXM01")
 
         self.assertIsNotNone(product)
         self.assertEqual(message, "Produto cadastrado com sucesso.")

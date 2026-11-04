@@ -21,11 +21,11 @@ def _extract_from_text(text: str) -> str | None:
                 candidates.append(path_parts[0])
 
     for candidate in candidates:
-        match = re.fullmatch(r"[A-Za-z0-9]{8,10}", candidate)
+        match = re.fullmatch(r"[A-Za-z0-9]{10}", candidate)
         if match:
             return candidate.upper()
 
-    match = re.search(r"/([A-Za-z0-9]{8,10})(?:/|$)", text)
+    match = re.search(r"/([A-Za-z0-9]{10})(?:/|$)", text)
     if match:
         return match.group(1).upper()
 
@@ -82,7 +82,7 @@ def extract_asin(url: str) -> str | None:
     path = parsed.path or ""
     if path and path != "/":
         path_candidate = path.strip("/")
-        if path_candidate and re.fullmatch(r"[A-Za-z0-9]{8,10}", path_candidate):
+        if path_candidate and re.fullmatch(r"[A-Za-z0-9]{10}", path_candidate):
             return path_candidate.upper()
 
     asins = [
