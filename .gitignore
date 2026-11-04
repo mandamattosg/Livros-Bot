@@ -22,8 +22,14 @@ tmp_*.db
 # GitHub clone folder not needed in this repo
 Livros_Bot/
 
+# Local scripts (load tests, simulations, demos)
+tmp_*.py
+demo_amazon_search.py
+
 # Local planning notes
 Roteiro_Pre_Lancamento_Escala.md
+Roadmap_Book_Price_Bot.md
+Roteiro_Testes_Operacionais_5a10_usuarios.md
 
 # IDE / OS
 .vscode/
