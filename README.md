@@ -8,6 +8,8 @@ Bot do Telegram que monitora preços de livros na Amazon Brasil e avisa quando o
 
 O usuário envia o link de um livro, o bot passa a acompanhar o preço pela **Amazon Creators API** e manda uma notificação quando houver uma queda relevante.
 
+Teste aqui: https://t.me/livrosbymands_bot
+
 ## Funcionalidades
 
 - Cadastro de livros a partir de links da Amazon (inclusive links encurtados)
