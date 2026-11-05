@@ -50,6 +50,7 @@ def get_session():
 def cleanup_old_records(db: Session, max_days: int = 60) -> dict[str, int]:
     """Remove registros antigos dos históricos e filas persistentes."""
     from app.models.monitoring_queue import MonitoringQueue
+    from app.models.registration_failure import RegistrationFailure
 
     cutoff = utc_now() - timedelta(days=max_days)
     deleted = {
@@ -58,6 +59,9 @@ def cleanup_old_records(db: Session, max_days: int = 60) -> dict[str, int]:
         "notification_queue": db.query(NotificationQueue).filter(
             NotificationQueue.created_at < cutoff,
             NotificationQueue.status.in_(["sent", "failed", "skipped"]),
+        ).delete(synchronize_session=False),
+        "registration_failures": db.query(RegistrationFailure).filter(
+            RegistrationFailure.created_at < cutoff
         ).delete(synchronize_session=False),
     }
     db.commit()

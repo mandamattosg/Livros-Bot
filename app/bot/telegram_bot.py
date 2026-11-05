@@ -11,9 +11,11 @@ from app.database.session import SessionLocal, init_db
 from app.logging import get_logger
 from app.models.price_history import PriceHistory
 from app.models.product import Product
+from app.models.registration_failure import LINK_NOT_AT_START, UNEXPECTED_ERROR
 from app.services.admin_alert_service import ADMIN_ERROR_PREFIX, send_admin_alert
 from app.services.admin_report_service import build_admin_report_message, get_admin_report_stats
 from app.services.product_service import ALREADY_MONITORED_MESSAGE, ProductService
+from app.services.registration_failure_service import record_registration_failure
 from app.utils.affiliate_link import build_affiliate_link
 
 logger = get_logger("app.bot.telegram_bot")
@@ -216,13 +218,19 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     message_text = update.message.text.strip()
     if not message_text.startswith("http"):
+        if "http" in message_text.lower():
+            db = SessionLocal()
+            try:
+                record_registration_failure(db, str(update.effective_user.id), LINK_NOT_AT_START, link=message_text)
+            finally:
+                db.close()
         await update.message.reply_text(build_help_message(is_admin=is_admin_user(update)))
         return
 
+    user_id = str(update.effective_user.id)
     db = SessionLocal()
     try:
         service = ProductService(db)
-        user_id = str(update.effective_user.id)
         service.get_or_create_user(
             user_id,
             username=update.effective_user.username,
@@ -244,6 +252,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
     except Exception as exc:
         logger.exception("Erro ao processar mensagem do bot")
+        db.rollback()
+        record_registration_failure(db, user_id, UNEXPECTED_ERROR, link=message_text, detail=str(exc))
         send_admin_alert(
             f"{ADMIN_ERROR_PREFIX}\n\n"
             "Erro ao processar mensagem do usuário\n\n"

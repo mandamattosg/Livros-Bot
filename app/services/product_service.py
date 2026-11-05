@@ -6,9 +6,11 @@ from sqlalchemy.orm import Session
 from app.amazon.client import AmazonClient
 from app.config import settings
 from app.models.product import Product
+from app.models.registration_failure import AMAZON_ERROR, INVALID_LINK, LIMIT_REACHED, PRODUCT_NOT_FOUND
 from app.models.user import User
 from app.models.user_product import UserProduct
 from app.services.price_service import PriceService
+from app.services.registration_failure_service import record_registration_failure
 from app.utils.parse_link import extract_asin
 
 ALREADY_MONITORED_MESSAGE = "Você já está monitorando este livro."
@@ -37,6 +39,7 @@ class ProductService:
 
         asin = extract_asin(link)
         if not asin:
+            record_registration_failure(self.db, user_id, INVALID_LINK, link=link)
             return None, "Link inválido da Amazon."
 
         existing_product = self.db.query(Product).filter(Product.asin == asin).first()
@@ -44,10 +47,12 @@ class ProductService:
             try:
                 data = self.amazon_client.get_items([asin])
             except Exception as exc:
+                record_registration_failure(self.db, user_id, AMAZON_ERROR, link=link, detail=str(exc))
                 return None, f"Não foi possível consultar a Amazon no momento: {exc}"
 
             items = data.get("itemsResult", {}).get("items", [])
             if not items:
+                record_registration_failure(self.db, user_id, PRODUCT_NOT_FOUND, link=link, detail=f"ASIN {asin}")
                 return None, "Não foi possível encontrar o produto na Amazon."
 
             item = items[0]
@@ -87,6 +92,7 @@ class ProductService:
         )
         monitor_limit = max(int(settings.USER_PRODUCT_MONITOR_LIMIT), 1)
         if current_count >= monitor_limit and existing_relation is None:
+            record_registration_failure(self.db, user_id, LIMIT_REACHED, link=link)
             return None, (
                 f"Você já atingiu o limite de {monitor_limit} produtos monitorados. "
                 "Remova um produto para cadastrar outro. Use o comando /remover"
